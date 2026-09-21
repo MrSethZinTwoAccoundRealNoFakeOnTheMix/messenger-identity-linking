@@ -1,0 +1,17 @@
+# Environment variables — NEVER commit these
+.env
+.env.*
+
+# Dependencies
+node_modules/
+
+# Cloudflare tunnel binary
+cloudflared.exe
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

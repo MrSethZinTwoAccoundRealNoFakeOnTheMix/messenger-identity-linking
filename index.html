@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Jewelry Store</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fa;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .badge {
+      display: inline-block;
+      background: #16a34a;
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      border: 1px solid #e5e7eb;
+    }
+    .card.verified { border-color: #16a34a; background: #f0fdf4; }
+    .card.error    { border-color: #dc2626; background: #fef2f2; }
+    h2 { margin-top: 16px; font-size: 20px; color: #111; }
+    p  { margin-top: 8px; font-size: 14px; color: #555; line-height: 1.5; }
+    .psid { font-family: monospace; font-size: 13px; color: #374151; word-break: break-all; }
+    #status { font-size: 13px; color: #6b7280; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+  <div id="sdk-status">Verifying identity…</div>
+
+  <div class="card" id="output">Loading…</div>
+
+  <script>
+    // Read identity from URL params (signed by server — no Messenger Extensions needed)
+    const params  = new URLSearchParams(window.location.search);
+    const psid    = params.get('psid');
+    const sig     = params.get('sig');
+
+    const statusEl = document.getElementById('sdk-status');
+    const outputEl = document.getElementById('output');
+
+    if (!psid || !sig) {
+      statusEl.innerText = '⚠️ No identity params in URL.';
+      outputEl.className = 'card error';
+      outputEl.innerHTML = '<p>Please open this page from the Messenger button.</p>';
+    } else {
+      // Verify the token server-side via GET /api/identity
+      fetch(`/api/identity?psid=${encodeURIComponent(psid)}&sig=${encodeURIComponent(sig)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.verified) {
+            statusEl.innerText = '✅ Identity verified!';
+            outputEl.className = 'card verified';
+            outputEl.innerHTML = `
+              <span class="badge">Secure Identity Verified</span>
+              <h2>Welcome to Test Jewelry Store</h2>
+              <p>You're signed in via Messenger. No login required.</p>
+              <p class="psid" style="margin-top:12px"><strong>PSID:</strong><br>${data.psid}</p>
+              <p style="margin-top:12px; color:#16a34a">✓ Your order will be automatically linked to this chat.</p>
+            `;
+          } else {
+            statusEl.innerText = '❌ Verification failed.';
+            outputEl.className = 'card error';
+            outputEl.innerHTML = `<p>Link ${data.reason || 'invalid'}. Please tap the button in Messenger again.</p>`;
+          }
+        })
+        .catch(err => {
+          statusEl.innerText = '❌ Network error.';
+          outputEl.className = 'card error';
+          outputEl.innerHTML = `<p>Could not verify identity: ${err.message}</p>`;
+        });
+    }
+  </script>
+
+</body>
+</html>
