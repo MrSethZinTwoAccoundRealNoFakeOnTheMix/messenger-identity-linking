@@ -1,9 +1,9 @@
 require('dotenv').config();
 const express = require('express');
-const crypto  = require('crypto');
-const path    = require('path');
+const crypto = require('crypto');
+const path = require('path');
 
-const app        = express();
+const app = express();
 const APP_SECRET = process.env.APP_SECRET;
 const PAGE_TOKEN = process.env.APP_SESSION_TOKEN; // page access token from .env
 
@@ -59,30 +59,30 @@ app.get('/api/identity', (req, res) => {
 // API: send a signed shop button to a PSID via Messenger
 app.post('/api/send-shop-link', async (req, res) => {
   const { psid, baseUrl, pageAccessToken } = req.body;
-  const token   = pageAccessToken || PAGE_TOKEN;
+  const token = pageAccessToken || PAGE_TOKEN;
   const shopUrl = generateSignedWebviewUrl(baseUrl, psid);
 
   try {
     const response = await fetch(
       `https://graph.facebook.com/v20.0/me/messages?access_token=${token}`,
       {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          recipient:       { id: psid },
-          messaging_type:  'RESPONSE',
+          recipient: { id: psid },
+          messaging_type: 'RESPONSE',
           message: {
             attachment: {
-              type:    'template',
+              type: 'template',
               payload: {
                 template_type: 'button',
-                text:          'Welcome! Tap below to open the store:',
+                text: 'Welcome! Tap below to open the store:',
                 buttons: [{
-                  type:                  'web_url',
-                  url:                   shopUrl,
-                  title:                 'Open Shop',
-                  webview_height_ratio:  'tall',
-                  messenger_extensions:  true,
+                  type: 'web_url',
+                  url: shopUrl,
+                  title: 'Open Shop',
+                  webview_height_ratio: 'tall',
+                  messenger_extensions: true,
                 }],
               },
             },
@@ -95,6 +95,10 @@ app.post('/api/send-shop-link', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+// Add this route before app.listen(...)
+app.get('/', (req, res) => {
+  res.send('Hello from trapiseth.site via Cloudflare Tunnel! broski');
 });
 
 const PORT = 3000;
