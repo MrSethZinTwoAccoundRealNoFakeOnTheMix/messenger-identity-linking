@@ -3,89 +3,331 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Test Jewelry Store</title>
+  <title>Luxe Jewelry Boutique</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f8f9fa;
-      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #fdfbf7;
+      color: #1c1917;
       min-height: 100vh;
+      padding-bottom: 90px;
     }
-    .badge {
-      display: inline-block;
-      background: #16a34a;
-      color: white;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      padding: 4px 10px;
-      border-radius: 20px;
-      text-transform: uppercase;
+    header {
+      background: #ffffff;
+      padding: 16px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #f2ede4;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
     }
-    .card {
-      background: white;
-      border-radius: 12px;
+    .brand { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #b45309; }
+    .auth-banner {
+      padding: 10px 16px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .auth-banner.verified { background: #ecfdf5; color: #065f46; border-bottom: 1px solid #a7f3d0; }
+    .auth-banner.unverified { background: #fffbeb; color: #92400e; border-bottom: 1px solid #fde68a; }
+
+    .catalog {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 16px;
       padding: 20px;
-      margin-top: 16px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      border: 1px solid #e5e7eb;
     }
-    .card.verified { border-color: #16a34a; background: #f0fdf4; }
-    .card.error    { border-color: #dc2626; background: #fef2f2; }
-    h2 { margin-top: 16px; font-size: 20px; color: #111; }
-    p  { margin-top: 8px; font-size: 14px; color: #555; line-height: 1.5; }
-    .psid { font-family: monospace; font-size: 13px; color: #374151; word-break: break-all; }
-    #status { font-size: 13px; color: #6b7280; margin-top: 8px; }
+    .product-card {
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #f2ede4;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    }
+    .product-img {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+      background: #f3f4f6;
+    }
+    .product-info { padding: 12px; flex: 1; display: flex; flex-direction: column; }
+    .product-title { font-size: 14px; font-weight: 600; line-height: 1.3; margin-bottom: 6px; }
+    .product-sku { font-size: 11px; color: #9ca3af; font-family: monospace; }
+    .product-price { font-size: 16px; font-weight: 700; color: #b45309; margin-top: auto; padding-top: 8px; }
+    .btn-add {
+      margin-top: 8px;
+      background: #1c1917;
+      color: #fff;
+      border: none;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-add:disabled { background: #d6d3d1; cursor: not-allowed; }
+
+    /* Bottom Bar */
+    .bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #ffffff;
+      padding: 14px 20px;
+      border-top: 1px solid #e7e5e4;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+    }
+    .cart-summary { font-size: 14px; font-weight: 600; }
+    .btn-checkout {
+      background: #b45309;
+      color: #ffffff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Checkout Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      align-items: flex-end;
+    }
+    .modal.active { display: flex; }
+    .modal-sheet {
+      background: #ffffff;
+      width: 100%;
+      border-radius: 20px 20px 0 0;
+      padding: 24px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-sheet h3 { font-size: 18px; margin-bottom: 12px; }
+    .form-input { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #d6d3d1; margin-bottom: 12px; font-size: 14px; }
   </style>
 </head>
 <body>
 
-  <div id="sdk-status">Verifying identity…</div>
+  <header>
+    <div class="brand">✨ LUXE JEWELRY</div>
+    <a href="/admin" style="font-size: 12px; color: #78716c; text-decoration: none;">Owner Admin →</a>
+  </header>
 
-  <div class="card" id="output">Loading…</div>
+  <div id="auth-bar" class="auth-banner unverified">
+    <span id="auth-msg">Checking identity…</span>
+  </div>
+
+  <div class="catalog" id="catalog-container">
+    <p style="padding: 20px; color: #78716c;">Loading catalog…</p>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="cart-summary">
+      <span id="cart-count">0 items</span> · <span id="cart-total" style="color:#b45309">$0.00</span>
+    </div>
+    <button class="btn-checkout" onclick="openCheckout()">Checkout</button>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal" id="checkout-modal">
+    <div class="modal-sheet">
+      <h3>Complete Your Order</h3>
+      <div id="checkout-body">
+        <div id="auth-warning" style="display:none; padding:12px; background:#fef2f2; color:#991b1b; border-radius:8px; margin-bottom:12px; font-size:13px;">
+          ⚠️ <strong>Messenger Link Required:</strong> You cannot place an order without opening this store from our Messenger chat.
+        </div>
+        <input type="text" id="cust-name" class="form-input" placeholder="Your Name" required>
+        <input type="tel" id="cust-phone" class="form-input" placeholder="Phone Number (Telegram/Cell)" required>
+        <input type="text" id="cust-address" class="form-input" placeholder="Delivery Address" required>
+        <input type="text" id="cust-note" class="form-input" placeholder="Notes (e.g. Ring Size 7)">
+
+        <div style="margin: 16px 0; padding: 12px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; font-size:13px;">
+          <strong>Payment:</strong> KHQR Pay upon confirmation<br>
+          <span style="color:#64748b; font-size:12px;">Owner manually checks payment & dispatches item.</span>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button class="btn-add" style="background:#e7e5e4; color:#1c1917; flex:1;" onclick="closeCheckout()">Cancel</button>
+          <button class="btn-checkout" id="submit-order-btn" style="flex:2;" onclick="submitOrder()">Confirm Order</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script>
-    // Read identity from URL params (signed by server — no Messenger Extensions needed)
-    const params  = new URLSearchParams(window.location.search);
-    const psid    = params.get('psid');
-    const sig     = params.get('sig');
+    const params = new URLSearchParams(window.location.search);
+    const psid = params.get('psid');
+    const sig = params.get('sig');
 
-    const statusEl = document.getElementById('sdk-status');
-    const outputEl = document.getElementById('output');
+    let isVerified = false;
+    let cart = [];
+    let productsList = [];
 
-    if (!psid || !sig) {
-      statusEl.innerText = '⚠️ No identity params in URL.';
-      outputEl.className = 'card error';
-      outputEl.innerHTML = '<p>Please open this page from the Messenger button.</p>';
-    } else {
-      // Verify the token server-side via GET /api/identity
-      fetch(`/api/identity?psid=${encodeURIComponent(psid)}&sig=${encodeURIComponent(sig)}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.verified) {
-            statusEl.innerText = '✅ Identity verified!';
-            outputEl.className = 'card verified';
-            outputEl.innerHTML = `
-              <span class="badge">Secure Identity Verified</span>
-              <h2>Welcome to Test Jewelry Store</h2>
-              <p>You're signed in via Messenger. No login required.</p>
-              <p class="psid" style="margin-top:12px"><strong>PSID:</strong><br>${data.psid}</p>
-              <p style="margin-top:12px; color:#16a34a">✓ Your order will be automatically linked to this chat.</p>
-            `;
-          } else {
-            statusEl.innerText = '❌ Verification failed.';
-            outputEl.className = 'card error';
-            outputEl.innerHTML = `<p>Link ${data.reason || 'invalid'}. Please tap the button in Messenger again.</p>`;
-          }
-        })
-        .catch(err => {
-          statusEl.innerText = '❌ Network error.';
-          outputEl.className = 'card error';
-          outputEl.innerHTML = `<p>Could not verify identity: ${err.message}</p>`;
-        });
+    // Verify identity on load
+    async function checkIdentity() {
+      const authBar = document.getElementById('auth-bar');
+      const authMsg = document.getElementById('auth-msg');
+
+      if (!psid || !sig) {
+        authBar.className = 'auth-banner unverified';
+        authMsg.innerHTML = '👁️ <strong>Browsing as Guest</strong> · Message our Page to order!';
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/identity?psid=${encodeURIComponent(psid)}&sig=${encodeURIComponent(sig)}`);
+        const data = await res.json();
+        if (data.verified) {
+          isVerified = true;
+          authBar.className = 'auth-banner verified';
+          authMsg.innerHTML = `✅ <strong>Connected:</strong> PSID ${psid.slice(0,8)}… (Orders automatically sent to your chat)`;
+        } else {
+          authBar.className = 'auth-banner unverified';
+          authMsg.innerHTML = '❌ Invalid or expired Messenger link.';
+        }
+      } catch (e) {
+        authMsg.innerHTML = '⚠️ Network error verifying identity.';
+      }
     }
-  </script>
 
+    async function loadCatalog() {
+      const res = await fetch('/api/products');
+      productsList = await res.json();
+      const container = document.getElementById('catalog-container');
+      
+      container.innerHTML = productsList.map(p => `
+        <div class="product-card">
+          <img src="${p.photo_url || 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=500&q=80'}" class="product-img" alt="${p.name}">
+          <div class="product-info">
+            <span class="product-sku">${p.id}</span>
+            <div class="product-title">${p.name}</div>
+            <div class="product-price">$${p.sell_price.toFixed(2)}</div>
+            <button class="btn-add" ${p.stock <= 0 ? 'disabled' : ''} onclick="addToCart('${p.id}')">
+              ${p.stock > 0 ? '+ Add to Cart' : 'Sold Out'}
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addToCart(prodId) {
+      const item = productsList.find(p => p.id === prodId);
+      if (!item) return;
+
+      const existing = cart.find(c => c.productId === prodId);
+      const currentQty = existing ? existing.quantity : 0;
+
+      if (currentQty >= item.stock) {
+        alert(`Cannot add more "${item.name}". Only ${item.stock} available in stock.`);
+        return;
+      }
+
+      if (existing) {
+        existing.quantity += 1;
+      } else {
+        cart.push({ productId: item.id, name: item.name, price: item.sell_price, quantity: 1 });
+      }
+
+      updateCartUI();
+    }
+
+    function updateCartUI() {
+      const count = cart.length;
+      const total = cart.reduce((acc, it) => acc + it.price * it.quantity, 0);
+      document.getElementById('cart-count').innerText = `${count} item${count === 1 ? '' : 's'}`;
+      document.getElementById('cart-total').innerText = `$${total.toFixed(2)}`;
+    }
+
+    function openCheckout() {
+      if (cart.length === 0) {
+        alert('Your cart is empty! Add a piece of jewelry first.');
+        return;
+      }
+      const warning = document.getElementById('auth-warning');
+      const submitBtn = document.getElementById('submit-order-btn');
+      
+      if (!isVerified) {
+        warning.style.display = 'block';
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.5';
+      } else {
+        warning.style.display = 'none';
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+      }
+      document.getElementById('checkout-modal').classList.add('active');
+    }
+
+    function closeCheckout() {
+      document.getElementById('checkout-modal').classList.remove('active');
+    }
+
+    async function submitOrder() {
+      const name = document.getElementById('cust-name').value;
+      const phone = document.getElementById('cust-phone').value;
+      const address = document.getElementById('cust-address').value;
+      const note = document.getElementById('cust-note').value;
+
+      if (!name || !phone || !address) {
+        alert('Please fill out your name, phone number, and delivery address.');
+        return;
+      }
+
+      const submitBtn = document.getElementById('submit-order-btn');
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Placing Order…';
+
+      try {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            psid,
+            sig,
+            items: cart,
+            customer_name: name,
+            phone,
+            address,
+            note
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          alert(`🎉 Order ${data.orderId} Placed!\n\nA confirmation receipt with your items has been sent directly to your Messenger chat.`);
+          cart = [];
+          updateCartUI();
+          closeCheckout();
+          loadCatalog();
+        } else {
+          alert('Order error: ' + data.error);
+        }
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Confirm Order';
+      }
+    }
+
+    checkIdentity();
+    loadCatalog();
+  </script>
 </body>
 </html>

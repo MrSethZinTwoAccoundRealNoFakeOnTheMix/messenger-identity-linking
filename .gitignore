@@ -17,3 +17,7 @@ Thumbs.db
 npm-debug.log*
 
 jewelry-shop-capstone-plan.md
+
+shop.db
+shop.db-wal
+shop.db-shm

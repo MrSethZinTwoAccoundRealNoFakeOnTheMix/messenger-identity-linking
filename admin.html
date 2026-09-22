@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Jewelry Shop</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --accent: #10b981;
+      --danger: #ef4444;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 24px; font-weight: 700; color: #fff; }
+    .badge { background: #0369a1; color: #e0f2fe; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media(max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card-bg); border-radius: 12px; padding: 20px; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); }
+    h2 { font-size: 18px; margin-bottom: 16px; color: #38bdf8; display: flex; justify-content: space-between; align-items: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); }
+    th { color: var(--text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+    .btn { background: #2563eb; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s; }
+    .btn:hover { opacity: 0.9; }
+    .btn-confirm { background: #16a34a; }
+    .btn-confirm:hover { background: #15803d; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+    input, select { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: #0f172a; color: #fff; font-size: 14px; }
+    .status-pill { display: inline-block; padding: 3px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .status-PENDING { background: #854d0e; color: #fef08a; }
+    .status-CONFIRMED { background: #166534; color: #bbf7d0; }
+    .status-CANCELLED { background: #991b1b; color: #fecaca; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>💍 Jewelry Store Owner Dashboard</h1>
+      <p style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">Live Inventory & Order Queue Management</p>
+    </div>
+    <span class="badge">SQLite WAL Mode Active</span>
+  </div>
+
+  <div class="grid">
+    <!-- Products CRUD -->
+    <div class="card">
+      <h2>Products Inventory</h2>
+      <div style="overflow-x: auto;">
+        <table id="products-table">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Name</th>
+              <th>Sell</th>
+              <th>Margin</th>
+              <th>Stock</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5">Loading inventory…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top: 24px; font-size: 15px; margin-bottom: 12px;">Add / Update Product</h3>
+      <form id="product-form">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label>Category</label>
+            <select id="prod-category" required>
+              <option value="Ring">Ring (RG)</option>
+              <option value="Necklace">Necklace (NK)</option>
+              <option value="Bracelet">Bracelet (BR)</option>
+              <option value="Earring">Earring (ER)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="prod-name" placeholder="e.g. Gold Signet Ring" required>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label>Import Price ($)</label>
+            <input type="number" step="0.01" id="prod-import" placeholder="30.00" required>
+          </div>
+          <div class="form-group">
+            <label>Sell Price ($)</label>
+            <input type="number" step="0.01" id="prod-sell" placeholder="65.00" required>
+          </div>
+          <div class="form-group">
+            <label>Stock Qty</label>
+            <input type="number" id="prod-stock" value="5" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Photo URL</label>
+          <input type="text" id="prod-photo" placeholder="https://images.unsplash.com/...">
+        </div>
+        <button type="submit" class="btn" style="width: 100%;">Save Product to Inventory</button>
+      </form>
+    </div>
+
+    <!-- Orders Queue -->
+    <div class="card">
+      <h2>Recent Orders</h2>
+      <div style="overflow-x: auto;">
+        <table id="orders-table">
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Total</th>
+              <th>Customer</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5">Loading orders…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function loadProducts() {
+      const res = await fetch('/api/admin/products');
+      const products = await res.json();
+      const tbody = document.querySelector('#products-table tbody');
+      if (products.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5">No products yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = products.map(p => `
+        <tr>
+          <td><strong style="color:#38bdf8">${p.id}</strong></td>
+          <td>${p.name}</td>
+          <td>$${p.sell_price.toFixed(2)}</td>
+          <td style="color:#10b981">${p.margin_percent}%</td>
+          <td><strong>${p.stock}</strong></td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadOrders() {
+      const res = await fetch('/api/admin/orders');
+      const orders = await res.json();
+      const tbody = document.querySelector('#orders-table tbody');
+      if (orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5">No orders received yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = orders.map(o => `
+        <tr>
+          <td>
+            <strong>${o.id}</strong><br>
+            <small style="color:var(--text-muted); font-size:10px;">PSID: ${o.psid.slice(0, 8)}…</small>
+          </td>
+          <td>$${o.total_amount.toFixed(2)}</td>
+          <td>${o.customer_name || 'N/A'}<br><small style="color:var(--text-muted)">${o.phone || ''}</small></td>
+          <td><span class="status-pill status-${o.status}">${o.status}</span></td>
+          <td>
+            ${o.status === 'PENDING' ? `
+              <div style="display:flex; gap:6px;">
+                <button class="btn btn-confirm" onclick="confirmOrder('${o.id}')">✓ Confirm</button>
+                <button class="btn" style="background:#ef4444;" onclick="cancelOrder('${o.id}')">✕ Cancel</button>
+              </div>
+            ` : `<span style="color:#64748b; font-size:12px;">${o.status}</span>`}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function confirmOrder(orderId) {
+      if (!confirm(`Confirm order ${orderId} and decrement stock atomically?`)) return;
+      try {
+        const res = await fetch(`/api/admin/orders/${orderId}/confirm`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          alert(data.message);
+          loadOrders();
+          loadProducts();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (e) {
+        alert('Network error: ' + e.message);
+      }
+    }
+
+    async function cancelOrder(orderId) {
+      if (!confirm(`Mark order ${orderId} as CANCELLED?`)) return;
+      try {
+        const res = await fetch(`/api/admin/orders/${orderId}/cancel`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          alert(data.message);
+          loadOrders();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (e) {
+        alert('Network error: ' + e.message);
+      }
+    }
+
+    document.getElementById('product-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        category: document.getElementById('prod-category').value,
+        name: document.getElementById('prod-name').value,
+        import_price: parseFloat(document.getElementById('prod-import').value),
+        sell_price: parseFloat(document.getElementById('prod-sell').value),
+        stock: parseInt(document.getElementById('prod-stock').value, 10),
+        photo_url: document.getElementById('prod-photo').value
+      };
+
+      const res = await fetch('/api/admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Product ${data.id} saved!`);
+        document.getElementById('product-form').reset();
+        loadProducts();
+      } else {
+        alert('Error: ' + data.error);
+      }
+    });
+
+    loadProducts();
+    loadOrders();
+    setInterval(loadOrders, 5000);
+  </script>
+</body>
+</html>
