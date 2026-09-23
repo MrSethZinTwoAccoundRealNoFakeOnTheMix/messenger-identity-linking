@@ -458,11 +458,9 @@ app.post('/webhook', async (req, res) => {
       const lastSent = lastShopLinkSentAt.get(senderPsid) || 0;
       const isCoolDownOver = (Date.now() - lastSent) > SHOP_LINK_COOLDOWN_MS;
 
-      // Trigger if:
-      // 1. Explicitly requested ('shop', quick reply, or button/postback), OR
-      // 2. Any incoming message (text, sticker, voice note, photo) arrived after cooldown expired!
-      if (isExplicitShopRequest || isCoolDownOver) {
-        console.log(`📩 Triggering response for PSID: ${senderPsid} (Trigger: "${actionPayload || userText || 'sticker/audio/interaction'}")`);
+      // 1. Explicit Shop Request: User tapped quick reply, postback, or typed 'shop'/'ចូលហាង'
+      if (isExplicitShopRequest) {
+        console.log(`🛍️ Explicit shop request from PSID: ${senderPsid} (Trigger: "${actionPayload || userText}")`);
         lastShopLinkSentAt.set(senderPsid, Date.now());
 
         const shopUrl = generateSignedWebviewUrl(BASE_URL, senderPsid);
@@ -524,9 +522,39 @@ app.post('/webhook', async (req, res) => {
             })
           });
 
-          console.log(`✅ Sent bilingual guide and shop button to ${senderPsid}`);
+          console.log(`✅ Sent full order guide and webview card to ${senderPsid}`);
         } catch (err) {
-          console.error('Error auto-sending shop link:', err);
+          console.error('Error sending explicit shop response:', err);
+        }
+      } 
+      // 2. General First Message / Interaction (Lightweight greeting with Quick Reply pill)
+      else if (isCoolDownOver) {
+        console.log(`👋 First interaction from PSID: ${senderPsid} (Trigger: "${userText || 'interaction'}")`);
+        lastShopLinkSentAt.set(senderPsid, Date.now());
+
+        const welcomeGreeting = 
+`👋 សួស្តី! សូមស្វាគមន៍មកកាន់ Luxe Jewelry ✨
+តើពួកយើងអាចជួយអ្វីបានដែរ? បើលោកអ្នកចង់មើលទំនិញ ឬបញ្ជាទិញ សូមចុចប៊ូតុងខាងក្រោមនេះ👇
+
+👋 Hello! Welcome to Luxe Jewelry ✨
+How can we help you today? To browse our collection or order, tap the button below👇`;
+
+        try {
+          await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              recipient: { id: senderPsid },
+              messaging_type: 'RESPONSE',
+              message: {
+                text: welcomeGreeting,
+                quick_replies: QUICK_REPLIES
+              }
+            })
+          });
+          console.log(`✅ Sent lightweight greeting with quick reply pill to ${senderPsid}`);
+        } catch (err) {
+          console.error('Error sending lightweight greeting:', err);
         }
       }
     }
