@@ -417,25 +417,13 @@ const lastShopLinkSentAt = new Map();
 // const SHOP_LINK_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 const SHOP_LINK_COOLDOWN_MS = 1000 * 60; // 1min for testing
 
-// Quick reply pill prompts floating above the composer bar
+// Quick reply pill prompts floating above the composer bar (Khmer + English)
 const QUICK_REPLIES = [
   {
     content_type: 'text',
-    title: '✨ Open Shop',
+    title: '✨ ចូលហាង / Open Shop',
     payload: 'OPEN_SHOP',
     image_url: 'https://img.icons8.com/color/48/diamond--v1.png'
-  },
-  {
-    content_type: 'text',
-    title: '📍 Location',
-    payload: 'STORE_LOCATION',
-    image_url: 'https://img.icons8.com/color/48/marker.png'
-  },
-  {
-    content_type: 'text',
-    title: '💍 How to Order',
-    payload: 'HOW_TO_ORDER',
-    image_url: 'https://img.icons8.com/color/48/help.png'
   }
 ];
 
@@ -464,7 +452,7 @@ app.post('/webhook', async (req, res) => {
       const postbackPayload = isPostback ? webhookEvent.postback.payload : '';
       const actionPayload = quickReplyPayload || postbackPayload;
 
-      const isExplicitShopRequest = isPostback || !!quickReplyPayload || userText === 'shop' || userText.includes('open shop');
+      const isExplicitShopRequest = isPostback || !!quickReplyPayload || userText === 'shop' || userText.includes('ចូលហាង') || userText.includes('open shop');
 
       // Check cooldown (in-memory)
       const lastSent = lastShopLinkSentAt.get(senderPsid) || 0;
@@ -480,69 +468,36 @@ app.post('/webhook', async (req, res) => {
         const shopUrl = generateSignedWebviewUrl(BASE_URL, senderPsid);
 
         try {
-          // A. Specific Quick Reply: Store Location
-          if (actionPayload === 'STORE_LOCATION') {
-            await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                recipient: { id: senderPsid },
-                messaging_type: 'RESPONSE',
-                message: {
-                  attachment: {
-                    type: 'template',
-                    payload: {
-                      template_type: 'button',
-                      text: '📍 We are based in Phnom Penh, Cambodia! We deliver nationwide across all provinces with secure delivery.\n\nBrowse our pieces below:',
-                      buttons: [{
-                        type: 'web_url',
-                        url: shopUrl,
-                        title: '✨ Browse Collection',
-                        webview_height_ratio: 'tall',
-                        messenger_extensions: true
-                      }]
-                    }
-                  },
-                  quick_replies: QUICK_REPLIES
-                }
-              })
-            });
-            console.log(`✅ Sent store location response to ${senderPsid}`);
-            continue;
-          }
+          // 1. Send Bilingual Guide: Khmer first, English bottom
+          const guideMessage = 
+`👋 សួស្តី! សូមស្វាគមន៍មកកាន់ Luxe Jewelry ✨
 
-          // B. Specific Quick Reply: How to Order
-          if (actionPayload === 'HOW_TO_ORDER') {
-            await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                recipient: { id: senderPsid },
-                messaging_type: 'RESPONSE',
-                message: {
-                  attachment: {
-                    type: 'template',
-                    payload: {
-                      template_type: 'button',
-                      text: '🛍️ Ordering is easy & accountless:\n1. Tap "Open Shop" below\n2. Select your ring size / chain length & add to cart\n3. Fill in your delivery address & KHQR pay\n\nYour receipt is sent automatically to this chat!',
-                      buttons: [{
-                        type: 'web_url',
-                        url: shopUrl,
-                        title: '✨ Open Shop Now',
-                        webview_height_ratio: 'tall',
-                        messenger_extensions: true
-                      }]
-                    }
-                  },
-                  quick_replies: QUICK_REPLIES
-                }
-              })
-            });
-            console.log(`✅ Sent how-to-order guide to ${senderPsid}`);
-            continue;
-          }
+🛍️ របៀបបញ្ជាទិញ & ប្រើប្រាស់ហាង៖
+១. ចុចប៊ូតុង "✨ ចូលមើលហាង" ខាងក្រោម ដើម្បីបើកទំព័រទំនិញ
+២. ជ្រើសរើសគ្រឿងអលង្ការដែលពេញចិត្ត រួចចុច "Add to Cart"
+៣. បំពេញព័ត៌មានដឹកជញ្ជូន និងស្កេនទូទាត់តាម KHQR ពេលទូទាត់ប្រាក់
 
-          // C. Default / "Open Shop": Send Shop Button Template + Hovering Quick Replies
+💡 មិនបាច់បង្កើតគណនី (No Login)៖ បង្កាន់ដៃបញ្ជាទិញនឹងត្រូវផ្ញើចូលក្នុង Messenger នេះដោយស្វ័យប្រវត្តិ!
+
+──────────────────
+🛍️ How to Order:
+1. Tap "Open Shop" below to browse our collection.
+2. Select your favorite jewelry and tap "Add to Cart".
+3. Enter your delivery info and pay via KHQR at checkout.
+
+💡 No account/login needed! Your order receipt will be sent directly to this chat.`;
+
+          await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              recipient: { id: senderPsid },
+              messaging_type: 'RESPONSE',
+              message: { text: guideMessage }
+            })
+          });
+
+          // 2. Send Shop Button Template with signed link & floating Quick Reply pill
           await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -554,11 +509,11 @@ app.post('/webhook', async (req, res) => {
                   type: 'template',
                   payload: {
                     template_type: 'button',
-                    text: '👋 Welcome to Luxe Jewelry! Tap below to browse our collection:',
+                    text: '👇 ចុចទីនេះដើម្បីចូលមើលហាង / Tap to open store:',
                     buttons: [{
                       type: 'web_url',
                       url: shopUrl,
-                      title: '✨ Open Shop',
+                      title: '✨ ចូលមើលហាង (Open Shop)',
                       webview_height_ratio: 'tall',
                       messenger_extensions: true
                     }]
@@ -568,7 +523,8 @@ app.post('/webhook', async (req, res) => {
               }
             })
           });
-          console.log(`✅ Sent signed shop link with quick replies to ${senderPsid}`);
+
+          console.log(`✅ Sent bilingual guide and shop button to ${senderPsid}`);
         } catch (err) {
           console.error('Error auto-sending shop link:', err);
         }
@@ -578,6 +534,7 @@ app.post('/webhook', async (req, res) => {
     res.sendStatus(404);
   }
 });
+
 
 const PORT = 3000;
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
