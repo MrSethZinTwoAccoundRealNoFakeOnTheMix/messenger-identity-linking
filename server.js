@@ -415,7 +415,29 @@ app.get('/webhook', (req, res) => {
 // Cache of last time a shop link was auto-sent to a PSID (in-memory cooldown)
 const lastShopLinkSentAt = new Map();
 // const SHOP_LINK_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
-const SHOP_LINK_COOLDOWN_MS = 1000 * 60; //1min
+const SHOP_LINK_COOLDOWN_MS = 1000 * 60; // 1min for testing
+
+// Quick reply pill prompts floating above the composer bar
+const QUICK_REPLIES = [
+  {
+    content_type: 'text',
+    title: '✨ Open Shop',
+    payload: 'OPEN_SHOP',
+    image_url: 'https://img.icons8.com/color/48/diamond--v1.png'
+  },
+  {
+    content_type: 'text',
+    title: '📍 Location',
+    payload: 'STORE_LOCATION',
+    image_url: 'https://img.icons8.com/color/48/marker.png'
+  },
+  {
+    content_type: 'text',
+    title: '💍 How to Order',
+    payload: 'HOW_TO_ORDER',
+    image_url: 'https://img.icons8.com/color/48/help.png'
+  }
+];
 
 // 2. Webhook Event Handler (Auto-reply with shop link when user messages page)
 app.post('/webhook', async (req, res) => {
@@ -435,28 +457,31 @@ app.post('/webhook', async (req, res) => {
         continue;
       }
 
-      // Check text or postback intent
+      // Check text, postback, or quick reply action
       const userText = (webhookEvent.message && webhookEvent.message.text ? webhookEvent.message.text.toLowerCase().trim() : '');
+      const quickReplyPayload = (webhookEvent.message && webhookEvent.message.quick_reply ? webhookEvent.message.quick_reply.payload : '');
       const isPostback = !!webhookEvent.postback;
       const postbackPayload = isPostback ? webhookEvent.postback.payload : '';
-      const isExplicitShopRequest = isPostback || userText === 'shop';
+      const actionPayload = quickReplyPayload || postbackPayload;
+
+      const isExplicitShopRequest = isPostback || !!quickReplyPayload || userText === 'shop' || userText.includes('open shop');
 
       // Check cooldown (in-memory)
       const lastSent = lastShopLinkSentAt.get(senderPsid) || 0;
       const isCoolDownOver = (Date.now() - lastSent) > SHOP_LINK_COOLDOWN_MS;
 
       // Trigger if:
-      // 1. Explicitly requested ('shop' or button/postback), OR
+      // 1. Explicitly requested ('shop', quick reply, or button/postback), OR
       // 2. Any incoming message (text, sticker, voice note, photo) arrived after cooldown expired!
       if (isExplicitShopRequest || isCoolDownOver) {
-        console.log(`📩 Triggering response for PSID: ${senderPsid} (Trigger: "${userText || postbackPayload || 'sticker/audio/interaction'}")`);
+        console.log(`📩 Triggering response for PSID: ${senderPsid} (Trigger: "${actionPayload || userText || 'sticker/audio/interaction'}")`);
         lastShopLinkSentAt.set(senderPsid, Date.now());
 
         const shopUrl = generateSignedWebviewUrl(BASE_URL, senderPsid);
 
         try {
-          // A. Specific Ice Breaker: Store Location
-          if (postbackPayload === 'STORE_LOCATION') {
+          // A. Specific Quick Reply: Store Location
+          if (actionPayload === 'STORE_LOCATION') {
             await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -477,7 +502,8 @@ app.post('/webhook', async (req, res) => {
                         messenger_extensions: true
                       }]
                     }
-                  }
+                  },
+                  quick_replies: QUICK_REPLIES
                 }
               })
             });
@@ -485,8 +511,8 @@ app.post('/webhook', async (req, res) => {
             continue;
           }
 
-          // B. Specific Ice Breaker: How to Order
-          if (postbackPayload === 'HOW_TO_ORDER') {
+          // B. Specific Quick Reply: How to Order
+          if (actionPayload === 'HOW_TO_ORDER') {
             await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -507,7 +533,8 @@ app.post('/webhook', async (req, res) => {
                         messenger_extensions: true
                       }]
                     }
-                  }
+                  },
+                  quick_replies: QUICK_REPLIES
                 }
               })
             });
@@ -515,7 +542,7 @@ app.post('/webhook', async (req, res) => {
             continue;
           }
 
-          // C. Default: Send Shop Button Template
+          // C. Default / "Open Shop": Send Shop Button Template + Hovering Quick Replies
           await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -536,11 +563,12 @@ app.post('/webhook', async (req, res) => {
                       messenger_extensions: true
                     }]
                   }
-                }
+                },
+                quick_replies: QUICK_REPLIES
               }
             })
           });
-          console.log(`✅ Sent signed shop link to ${senderPsid}`);
+          console.log(`✅ Sent signed shop link with quick replies to ${senderPsid}`);
         } catch (err) {
           console.error('Error auto-sending shop link:', err);
         }
