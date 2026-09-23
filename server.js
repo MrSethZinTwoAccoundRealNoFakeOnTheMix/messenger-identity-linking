@@ -438,24 +438,84 @@ app.post('/webhook', async (req, res) => {
       // Check text or postback intent
       const userText = (webhookEvent.message && webhookEvent.message.text ? webhookEvent.message.text.toLowerCase().trim() : '');
       const isPostback = !!webhookEvent.postback;
+      const postbackPayload = isPostback ? webhookEvent.postback.payload : '';
+      const isExplicitShopRequest = isPostback || userText === 'shop';
 
-      // Keywords that trigger the shop link
-      const isGreetingOrShopIntent = isPostback || [
-        'hi', 'hello', 'hey', 'start', 'get started', 'shop', 'store', 'catalog', 'buy', 'menu'
-      ].includes(userText);
-
-      // Check cooldown so we don't spam the user on every normal chat message
+      // Check cooldown (in-memory)
       const lastSent = lastShopLinkSentAt.get(senderPsid) || 0;
       const isCoolDownOver = (Date.now() - lastSent) > SHOP_LINK_COOLDOWN_MS;
 
-      // Only send if it matches intent AND cooldown has passed (or user explicitly typed 'shop')
-      if (isPostback || userText === 'shop' || (isGreetingOrShopIntent && isCoolDownOver)) {
-        console.log(`📩 Triggering shop link for PSID: ${senderPsid} (Trigger: "${userText || 'postback'}")`);
+      // Trigger if:
+      // 1. Explicitly requested ('shop' or button/postback), OR
+      // 2. Any incoming message (text, sticker, voice note, photo) arrived after cooldown expired!
+      if (isExplicitShopRequest || isCoolDownOver) {
+        console.log(`📩 Triggering response for PSID: ${senderPsid} (Trigger: "${userText || postbackPayload || 'sticker/audio/interaction'}")`);
         lastShopLinkSentAt.set(senderPsid, Date.now());
 
         const shopUrl = generateSignedWebviewUrl(BASE_URL, senderPsid);
 
         try {
+          // A. Specific Ice Breaker: Store Location
+          if (postbackPayload === 'STORE_LOCATION') {
+            await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                recipient: { id: senderPsid },
+                messaging_type: 'RESPONSE',
+                message: {
+                  attachment: {
+                    type: 'template',
+                    payload: {
+                      template_type: 'button',
+                      text: '📍 We are based in Phnom Penh, Cambodia! We deliver nationwide across all provinces with secure delivery.\n\nBrowse our pieces below:',
+                      buttons: [{
+                        type: 'web_url',
+                        url: shopUrl,
+                        title: '✨ Browse Collection',
+                        webview_height_ratio: 'tall',
+                        messenger_extensions: true
+                      }]
+                    }
+                  }
+                }
+              })
+            });
+            console.log(`✅ Sent store location response to ${senderPsid}`);
+            continue;
+          }
+
+          // B. Specific Ice Breaker: How to Order
+          if (postbackPayload === 'HOW_TO_ORDER') {
+            await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                recipient: { id: senderPsid },
+                messaging_type: 'RESPONSE',
+                message: {
+                  attachment: {
+                    type: 'template',
+                    payload: {
+                      template_type: 'button',
+                      text: '🛍️ Ordering is easy & accountless:\n1. Tap "Open Shop" below\n2. Select your ring size / chain length & add to cart\n3. Fill in your delivery address & KHQR pay\n\nYour receipt is sent automatically to this chat!',
+                      buttons: [{
+                        type: 'web_url',
+                        url: shopUrl,
+                        title: '✨ Open Shop Now',
+                        webview_height_ratio: 'tall',
+                        messenger_extensions: true
+                      }]
+                    }
+                  }
+                }
+              })
+            });
+            console.log(`✅ Sent how-to-order guide to ${senderPsid}`);
+            continue;
+          }
+
+          // C. Default: Send Shop Button Template
           await fetch(`https://graph.facebook.com/v20.0/me/messages?access_token=${PAGE_TOKEN}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
