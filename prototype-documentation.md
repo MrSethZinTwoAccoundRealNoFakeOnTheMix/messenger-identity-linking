@@ -254,3 +254,62 @@ sqlite3 /root/jewelry-shop/shop.db "VACUUM INTO '/root/jewelry-shop/backups/shop
 | **Atomic SQL Check-and-Decrement** | Application-Level Locks | Eliminates race conditions during concurrent confirmations directly at the database engine level. |
 | **Proxmox LXC + SQLite WAL** | Heavy Cloud Database (RDS/Postgres) | Reduces operational complexity and hosting costs to $0, achieving sub-5ms local queries on an edge homelab. |
 | **Cloudflare Zero Trust Tunnel** | Port Forwarding / Dynamic DNS | Protects home network IP, bypasses ISP CGNAT, and automates TLS encryption without firewall holes. |
+
+---
+
+## 9. Engineering Challenges Faced & Solutions Implemented
+
+Throughout the development, integration, and homelab deployment of this prototype, several non-trivial engineering obstacles arose across security, networking, platform policies, and environment compatibility. Below is the comprehensive post-mortem analysis of these challenges and their implemented architectural solutions.
+
+### Challenge 1: Brittle Client-Side Webview SDKs vs. Accountless Security
+* **The Problem:** Meta's legacy `MessengerExtensions.getContext()` SDK is deprecated, behaves inconsistently across iOS and Android in-app browsers, and requires an invasive Meta App Review process simply to retrieve the user's PSID. Conversely, naive URL parameters (`?psid=12345`) are completely insecure, allowing any malicious visitor to charge or place orders under another customer's identity.
+* **Architectural Solution:** We completely rejected client-side SDKs in favor of a **Server-Signed HMAC-SHA256 Token pattern**. When a user requests the store, the backend signs their PSID with the private `APP_SECRET`. When submitting an order, the backend re-validates the token using `crypto.timingSafeEqual`. This guarantees 100% cross-platform compatibility across all mobile and desktop browsers with zero secret leakage and zero client-side dependencies.
+
+---
+
+### Challenge 2: Meta 24-Hour Messaging Policy Window Expiration
+* **The Problem:** Meta strictly restricts automated standard messages (`messaging_type: RESPONSE`) to within **24 hours** of a customer's last interaction. If a customer opens a static shopping link received days prior, the server's attempt to deliver the order confirmation carousel fails with Meta Error `#10: Outside allowed window`.
+* **Architectural Solution:** We implemented **Webhook-driven dynamic link generation**. Rather than distributing static store links, customers initiate interaction by sending a message (e.g., *"Hi"* or *"Shop"*). This incoming event triggers Meta's webhook, resets the 24-hour messaging window to a fresh 24 hours, and immediately auto-replies with the customer's signed shop link. When the customer submits an order minutes later, the 24-hour window is guaranteed open, allowing instant delivery of the interactive receipt carousel.
+
+---
+
+### Challenge 3: Inbound Webhook Dropping in Meta Development Mode
+* **The Problem:** During live testing with real accounts, the backend successfully sent outbound messages to secondary accounts (`Seth Tra`), but incoming messages from that same account completely failed to trigger the server's webhook or appear in the server logs.
+* **Root Cause & Solution:** In Meta's platform architecture, an application in **Development Mode** enforces an inbound privacy sandbox: Meta's edge servers silently discard incoming webhook events from accounts that lack an assigned App Role. While outbound API calls to any open chat thread succeed, inbound webhooks are suppressed. The solution was configuring the account as a **Tester** under `App Roles → Roles → Testers` (allowing up to 50 free testers without business verification), resolving the silent drop and enabling automated end-to-end webhook replies.
+
+---
+
+### Challenge 4: Deploying Behind Residential CGNAT Without IPv4 Port Forwarding
+* **The Problem:** The production homelab server is positioned behind residential **Carrier-Grade NAT (CGNAT)** without a dedicated public IPv4 address and with no IPv6 routing. Traditional router port forwarding is impossible because the WAN IP is shared among hundreds of ISP subscribers. Additionally, Meta Webhooks strictly mandate public, valid SSL/TLS certificates.
+* **Architectural Solution:** Deployed a **Cloudflare Zero Trust Tunnel (`cloudflared`)** running as a Linux `systemd` service directly inside the homelab environment. The tunnel maintains persistent, outbound-only encrypted tunnels (QUIC/HTTPS) to Cloudflare's edge network. This bypasses CGNAT with zero router port forwarding, shields the homelab's physical IP address from DDoS threats, and automatically terminates valid SSL/TLS certificates at the edge.
+
+---
+
+### Challenge 5: Multi-Tenant Host Isolation (Homelab Storage & Media Contention)
+* **The Problem:** The homelab physical host already operates an OpenMediaVault (OMV) NAS containing private personal data, alongside high-intensity media streaming services (Plex/Jellyfin). Hosting a public-facing e-commerce application on the same host OS introduced severe security risks (public web traffic sharing filesystems with private storage) and performance risks (media transcoding CPU spikes causing Meta webhook timeouts).
+* **Architectural Solution:** Provisioned an isolated, unprivileged **Proxmox VE LXC container** (Ubuntu 24.04). By utilizing OS-level virtualization, the entire Node.js, SQLite, and Cloudflare stack operates with a minimal footprint of **~45 MB RAM**, boots in 2 seconds, and maintains strict kernel namespace separation from the OMV storage array.
+
+---
+
+### Challenge 6: Native C++ Binary Engine Compatibility (`better-sqlite3` vs. Node LTS)
+* **The Problem:** Upon deploying the project to Ubuntu 24.04, the application failed to start, with PM2 entering a rapid restart loop (`restart 15`) and `curl localhost:3000` throwing connection refused. The installation log showed an `EBADENGINE` warning because `better-sqlite3@13` mandated Node.js `>=22`, whereas the container default was Node 20 LTS.
+* **Solution:** Upgraded the container to **Node.js 22 LTS** via the official NodeSource repository, executed `npm rebuild` to cleanly compile the native C++ SQLite bindings for the Linux x86_64 architecture, and restarted the PM2 supervisor.
+
+---
+
+### Challenge 7: Inventory Denial-of-Service (DoS) and Checkout Concurrency
+* **The Problem:** In an accountless e-commerce system where anyone can initiate checkout, decrementing inventory at checkout submission creates an Inventory Denial of Service vulnerability: malicious actors or abandoned carts could lock up scarce jewelry stock. Furthermore, concurrent orders for the final unit of a piece could produce race conditions and oversell physical stock.
+* **Architectural Solution:** We established a strict two-stage state machine:
+  1. Checkout submissions enter **`PENDING`** status without mutating inventory.
+  2. Stock decrements **only when the store owner confirms the order** in the Admin Dashboard after payment verification.
+  3. Confirmations execute an **atomic SQL check-and-decrement**:
+     ```sql
+     UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?
+     ```
+     If another transaction confirmed the item milliseconds earlier and stock is zero, `changes` equals 0, the transaction aborts, and a `409 Conflict` error is returned.
+
+---
+
+### Challenge 8: Exposing the Management Dashboard on a Public Domain
+* **The Problem:** Once the application was mapped to `test.trapiseth.site`, the administrative route (`/admin`) became publicly accessible, exposing wholesale import prices, inventory adjustments, and order cancellation controls to anyone with the URL.
+* **Architectural Solution:** Implemented single-owner credential protection backed by HMAC session validation (`ADMIN_PASSWORD`). Built an authentication middleware (`requireAdminAuth`) intercepting all `/api/admin/*` endpoints with `401 Unauthorized`, paired with an interactive client-side login overlay in [`admin.html`](file:///d:/Test%20Page%20SDK/messenger-spike/admin.html) that manages token lifecycle and automatic session recovery.
