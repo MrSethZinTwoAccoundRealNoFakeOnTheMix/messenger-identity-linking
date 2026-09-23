@@ -25,7 +25,7 @@ function generateSignedWebviewUrl(baseUrl, psid) {
 // Verify a signed PSID token
 function verifySignedToken(psid, sig) {
   if (!psid || !sig) return { ok: false, reason: 'missing params' };
-  
+
   // Dev mode mock bypass
   if (process.env.NODE_ENV !== 'production' && sig === 'demo-bypass') {
     return { ok: true };
@@ -414,7 +414,8 @@ app.get('/webhook', (req, res) => {
 
 // Cache of last time a shop link was auto-sent to a PSID (in-memory cooldown)
 const lastShopLinkSentAt = new Map();
-const SHOP_LINK_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+// const SHOP_LINK_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+const SHOP_LINK_COOLDOWN_MS = 1000 * 60; //1min
 
 // 2. Webhook Event Handler (Auto-reply with shop link when user messages page)
 app.post('/webhook', async (req, res) => {
