@@ -8,6 +8,7 @@ const app = express();
 const APP_SECRET = process.env.APP_SECRET;
 const PAGE_TOKEN = process.env.APP_SESSION_TOKEN;
 const BASE_URL = process.env.BASE_URL || 'https://test.trapiseth.site';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -203,13 +204,36 @@ app.post('/api/orders', async (req, res) => {
 
 // ─── Admin Routes ───────────────────────────────────────────────────────────
 
+// Generate admin auth token using HMAC of ADMIN_PASSWORD
+function getExpectedAdminToken() {
+  return crypto.createHmac('sha256', APP_SECRET || 'luxe_secret').update(`admin:${ADMIN_PASSWORD}`).digest('hex');
+}
+
+// Admin auth middleware
+function requireAdminAuth(req, res, next) {
+  const token = req.headers['x-admin-token'] || req.query.admin_token;
+  if (token && token === getExpectedAdminToken()) {
+    return next();
+  }
+  return res.status(401).json({ error: 'Unauthorized. Please login with admin password.' });
+}
+
+// Admin: Login endpoint
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (!password || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Incorrect admin password.' });
+  }
+  res.json({ success: true, token: getExpectedAdminToken() });
+});
+
 // Admin Dashboard UI
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
 // Admin: Get all products (with import price and margins)
-app.get('/api/admin/products', (req, res) => {
+app.get('/api/admin/products', requireAdminAuth, (req, res) => {
   const products = db.prepare(`
     SELECT id, name, category, import_price, sell_price, stock, photo_url,
            ROUND(((sell_price - import_price) / sell_price) * 100, 1) as margin_percent
@@ -220,7 +244,7 @@ app.get('/api/admin/products', (req, res) => {
 });
 
 // Admin: Add or update product
-app.post('/api/admin/products', (req, res) => {
+app.post('/api/admin/products', requireAdminAuth, (req, res) => {
   const { id, name, category, import_price, sell_price, stock, photo_url } = req.body;
   if (!name || !category || import_price == null || sell_price == null) {
     return res.status(400).json({ error: 'Missing required product fields.' });
@@ -257,7 +281,7 @@ app.post('/api/admin/products', (req, res) => {
 });
 
 // Admin: Get Orders list
-app.get('/api/admin/orders', (req, res) => {
+app.get('/api/admin/orders', requireAdminAuth, (req, res) => {
   const orders = db.prepare('SELECT * FROM orders ORDER BY created_at DESC').all();
   for (const o of orders) {
     o.items = db.prepare(`
@@ -271,7 +295,7 @@ app.get('/api/admin/orders', (req, res) => {
 });
 
 // Admin: Confirm Order with ATOMIC stock decrement concurrency guard
-app.post('/api/admin/orders/:id/confirm', (req, res) => {
+app.post('/api/admin/orders/:id/confirm', requireAdminAuth, (req, res) => {
   const orderId = req.params.id;
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
 
@@ -312,7 +336,7 @@ app.post('/api/admin/orders/:id/confirm', (req, res) => {
 });
 
 // Admin: Cancel Order (e.g. out of stock or payment not received)
-app.post('/api/admin/orders/:id/cancel', (req, res) => {
+app.post('/api/admin/orders/:id/cancel', requireAdminAuth, (req, res) => {
   const orderId = req.params.id;
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
 
@@ -324,6 +348,7 @@ app.post('/api/admin/orders/:id/cancel', (req, res) => {
   db.prepare("UPDATE orders SET status = 'CANCELLED' WHERE id = ?").run(orderId);
   res.json({ success: true, message: `Order ${orderId} has been marked as CANCELLED.` });
 });
+
 
 // Helper API: trigger shop link to user (from spike)
 app.post('/api/send-shop-link', async (req, res) => {

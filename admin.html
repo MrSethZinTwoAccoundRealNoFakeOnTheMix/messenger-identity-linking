@@ -31,6 +31,8 @@
     .btn:hover { opacity: 0.9; }
     .btn-confirm { background: #16a34a; }
     .btn-confirm:hover { background: #15803d; }
+    .btn-logout { background: #334155; color: #cbd5e1; font-size: 12px; padding: 6px 12px; }
+    .btn-logout:hover { background: #475569; }
     .form-group { margin-bottom: 14px; }
     label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
     input, select { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border); background: #0f172a; color: #fff; font-size: 14px; }
@@ -38,16 +40,58 @@
     .status-PENDING { background: #854d0e; color: #fef08a; }
     .status-CONFIRMED { background: #166534; color: #bbf7d0; }
     .status-CANCELLED { background: #991b1b; color: #fecaca; }
+
+    /* Login Modal Overlay */
+    .login-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .login-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 32px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+    }
   </style>
 </head>
 <body>
+
+  <!-- Login Modal -->
+  <div id="login-modal" class="login-overlay" style="display: none;">
+    <div class="login-box">
+      <h2 style="font-size: 20px; color: #fff; margin-bottom: 8px;">🔒 Owner Authentication</h2>
+      <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">Enter your admin password to access store management.</p>
+      
+      <div id="login-error" style="display:none; padding:10px; background:#7f1d1d; color:#fecaca; border-radius:6px; font-size:13px; margin-bottom:14px;"></div>
+      
+      <form id="login-form">
+        <div class="form-group">
+          <label>Admin Password</label>
+          <input type="password" id="admin-pass-input" placeholder="Enter password" autofocus required style="padding: 12px;">
+        </div>
+        <button type="submit" class="btn" style="width: 100%; padding: 12px; font-size: 14px; margin-top: 4px;">Sign In to Dashboard</button>
+      </form>
+    </div>
+  </div>
 
   <div class="header">
     <div>
       <h1>💍 Jewelry Store Owner Dashboard</h1>
       <p style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">Live Inventory & Order Queue Management</p>
     </div>
-    <span class="badge">SQLite WAL Mode Active</span>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span class="badge">SQLite WAL Mode Active</span>
+      <button class="btn btn-logout" onclick="adminLogout()">Sign Out</button>
+    </div>
   </div>
 
   <div class="grid">
@@ -133,58 +177,106 @@
   </div>
 
   <script>
-    async function loadProducts() {
-      const res = await fetch('/api/admin/products');
-      const products = await res.json();
-      const tbody = document.querySelector('#products-table tbody');
-      if (products.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5">No products yet.</td></tr>';
-        return;
+    let adminToken = localStorage.getItem('admin_token');
+
+    function showLoginModal(errMsg = '') {
+      const modal = document.getElementById('login-modal');
+      const errBox = document.getElementById('login-error');
+      if (errMsg) {
+        errBox.textContent = errMsg;
+        errBox.style.display = 'block';
+      } else {
+        errBox.style.display = 'none';
       }
-      tbody.innerHTML = products.map(p => `
-        <tr>
-          <td><strong style="color:#38bdf8">${p.id}</strong></td>
-          <td>${p.name}</td>
-          <td>$${p.sell_price.toFixed(2)}</td>
-          <td style="color:#10b981">${p.margin_percent}%</td>
-          <td><strong>${p.stock}</strong></td>
-        </tr>
-      `).join('');
+      modal.style.display = 'flex';
+      setTimeout(() => document.getElementById('admin-pass-input').focus(), 50);
+    }
+
+    function hideLoginModal() {
+      document.getElementById('login-modal').style.display = 'none';
+    }
+
+    function adminLogout() {
+      localStorage.removeItem('admin_token');
+      adminToken = null;
+      showLoginModal('Signed out successfully.');
+    }
+
+    async function authFetch(url, options = {}) {
+      options.headers = options.headers || {};
+      if (adminToken) {
+        options.headers['x-admin-token'] = adminToken;
+      }
+      const res = await fetch(url, options);
+      if (res.status === 401) {
+        localStorage.removeItem('admin_token');
+        adminToken = null;
+        showLoginModal('Session expired or unauthorized. Please enter admin password.');
+        throw new Error('Unauthorized');
+      }
+      return res;
+    }
+
+    async function loadProducts() {
+      try {
+        const res = await authFetch('/api/admin/products');
+        const products = await res.json();
+        const tbody = document.querySelector('#products-table tbody');
+        if (products.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5">No products yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = products.map(p => `
+          <tr>
+            <td><strong style="color:#38bdf8">${p.id}</strong></td>
+            <td>${p.name}</td>
+            <td>$${p.sell_price.toFixed(2)}</td>
+            <td style="color:#10b981">${p.margin_percent}%</td>
+            <td><strong>${p.stock}</strong></td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        // Handled in authFetch if 401
+      }
     }
 
     async function loadOrders() {
-      const res = await fetch('/api/admin/orders');
-      const orders = await res.json();
-      const tbody = document.querySelector('#orders-table tbody');
-      if (orders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5">No orders received yet.</td></tr>';
-        return;
+      try {
+        const res = await authFetch('/api/admin/orders');
+        const orders = await res.json();
+        const tbody = document.querySelector('#orders-table tbody');
+        if (orders.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5">No orders received yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = orders.map(o => `
+          <tr>
+            <td>
+              <strong>${o.id}</strong><br>
+              <small style="color:var(--text-muted); font-size:10px;">PSID: ${o.psid.slice(0, 8)}…</small>
+            </td>
+            <td>$${o.total_amount.toFixed(2)}</td>
+            <td>${o.customer_name || 'N/A'}<br><small style="color:var(--text-muted)">${o.phone || ''}</small></td>
+            <td><span class="status-pill status-${o.status}">${o.status}</span></td>
+            <td>
+              ${o.status === 'PENDING' ? `
+                <div style="display:flex; gap:6px;">
+                  <button class="btn btn-confirm" onclick="confirmOrder('${o.id}')">✓ Confirm</button>
+                  <button class="btn" style="background:#ef4444;" onclick="cancelOrder('${o.id}')">✕ Cancel</button>
+                </div>
+              ` : `<span style="color:#64748b; font-size:12px;">${o.status}</span>`}
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        // Handled in authFetch if 401
       }
-      tbody.innerHTML = orders.map(o => `
-        <tr>
-          <td>
-            <strong>${o.id}</strong><br>
-            <small style="color:var(--text-muted); font-size:10px;">PSID: ${o.psid.slice(0, 8)}…</small>
-          </td>
-          <td>$${o.total_amount.toFixed(2)}</td>
-          <td>${o.customer_name || 'N/A'}<br><small style="color:var(--text-muted)">${o.phone || ''}</small></td>
-          <td><span class="status-pill status-${o.status}">${o.status}</span></td>
-          <td>
-            ${o.status === 'PENDING' ? `
-              <div style="display:flex; gap:6px;">
-                <button class="btn btn-confirm" onclick="confirmOrder('${o.id}')">✓ Confirm</button>
-                <button class="btn" style="background:#ef4444;" onclick="cancelOrder('${o.id}')">✕ Cancel</button>
-              </div>
-            ` : `<span style="color:#64748b; font-size:12px;">${o.status}</span>`}
-          </td>
-        </tr>
-      `).join('');
     }
 
     async function confirmOrder(orderId) {
       if (!confirm(`Confirm order ${orderId} and decrement stock atomically?`)) return;
       try {
-        const res = await fetch(`/api/admin/orders/${orderId}/confirm`, { method: 'POST' });
+        const res = await authFetch(`/api/admin/orders/${orderId}/confirm`, { method: 'POST' });
         const data = await res.json();
         if (data.success) {
           alert(data.message);
@@ -194,14 +286,14 @@
           alert('Error: ' + data.error);
         }
       } catch (e) {
-        alert('Network error: ' + e.message);
+        if (e.message !== 'Unauthorized') alert('Network error: ' + e.message);
       }
     }
 
     async function cancelOrder(orderId) {
       if (!confirm(`Mark order ${orderId} as CANCELLED?`)) return;
       try {
-        const res = await fetch(`/api/admin/orders/${orderId}/cancel`, { method: 'POST' });
+        const res = await authFetch(`/api/admin/orders/${orderId}/cancel`, { method: 'POST' });
         const data = await res.json();
         if (data.success) {
           alert(data.message);
@@ -210,7 +302,7 @@
           alert('Error: ' + data.error);
         }
       } catch (e) {
-        alert('Network error: ' + e.message);
+        if (e.message !== 'Unauthorized') alert('Network error: ' + e.message);
       }
     }
 
@@ -225,24 +317,61 @@
         photo_url: document.getElementById('prod-photo').value
       };
 
-      const res = await fetch('/api/admin/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(`Product ${data.id} saved!`);
-        document.getElementById('product-form').reset();
-        loadProducts();
-      } else {
-        alert('Error: ' + data.error);
+      try {
+        const res = await authFetch('/api/admin/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`Product ${data.id} saved!`);
+          document.getElementById('product-form').reset();
+          loadProducts();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (e) {
+        if (e.message !== 'Unauthorized') alert('Network error: ' + e.message);
       }
     });
 
-    loadProducts();
-    loadOrders();
-    setInterval(loadOrders, 5000);
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pass = document.getElementById('admin-pass-input').value;
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pass })
+        });
+        const data = await res.json();
+        if (data.success && data.token) {
+          adminToken = data.token;
+          localStorage.setItem('admin_token', adminToken);
+          hideLoginModal();
+          document.getElementById('admin-pass-input').value = '';
+          loadProducts();
+          loadOrders();
+        } else {
+          showLoginModal(data.error || 'Incorrect admin password.');
+        }
+      } catch (err) {
+        showLoginModal('Connection error: ' + err.message);
+      }
+    });
+
+    // Initial Auth Check
+    if (!adminToken) {
+      showLoginModal();
+    } else {
+      loadProducts();
+      loadOrders();
+    }
+
+    setInterval(() => {
+      if (adminToken) loadOrders();
+    }, 5000);
   </script>
 </body>
 </html>
